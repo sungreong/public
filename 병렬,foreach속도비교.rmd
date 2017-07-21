@@ -1,0 +1,67 @@
+---
+title: "속도비교"
+author: "이성령"
+date: "2017년 7월 21일"
+output: 
+  html_document:
+    keep_md: true
+---
+
+```{r,warings=FALSE}
+library(mlbench)
+library(caret)
+library(doParallel)
+library(dplyr)
+```
+
+
+```{r,warings=FALSE}
+data(Sonar)
+indexTrain <- createDataPartition(1:nrow(Sonar), p = .7, list = F)
+training <- Sonar[ indexTrain, ]
+testing  <- Sonar[-indexTrain, ]
+#10-fold cross validation 을 5번 반복하여 가장 좋은 후보의 파라미터 그리드를 찾게 해주는 일종의 장치를 만드는 코드이다.
+fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 5)
+
+rf_fit <- train(Class ~ ., data = training, method = "rf", trControl = fitControl, verbose = F)
+predict(rf_fit, newdata = testing) %>% confusionMatrix(testing$Class)
+
+#아래 코드는 mtry 의 후보를 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 로 바꾸어 설정하고 이 중에서 채택해 보는 코드이다.
+customGrid <- expand.grid(mtry = 1:10)
+
+rf_fit2 <- train(Class ~ ., data = training, method = "rf", trControl = fitControl, tuneGrid = customGrid, verbose = F)
+
+#수동으로 튜닝파라미터 조합개수를 늘려볼 필요가 있다. 이땐 train() 함수의 tuneLength 인자를 이용하면 된다.
+fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 5, search = "random")
+
+getDoParWorkers()
+
+# 속도 비교 해보기 일반 train
+time <- system.time({
+  train(Class ~ ., data = training, method = "rf", trControl = fitControl, tuneGrid = customGrid, verbose = F)
+})
+# 병렬 붙이고 train 
+registerDoParallel(detectCores()-1)
+getDoParWorkers()
+time2 <- system.time({
+  k2 <- train(Class ~ ., data = training, method = "rf", trControl = fitControl, tuneGrid = customGrid, verbose = F)
+})
+customGrid <- expand.grid(mtry = 1:10)
+fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 5)
+#foreach + 병렬 train 
+library(foreach)
+time3 <- system.time(model<- foreach(mtry2=1:10,number2=10,a=5,.combine=c,.packages="caret",.multicombine = TRUE) %dopar% 
+                        { train(Class ~ ., data = training, method = "rf", 
+                                    trControl =trainControl(method = "repeatedcv", number=number2,repeats= a), 
+                                     tuneGrid =expand.grid(mtry =mtry2),verbose = F)
+                        }
+                      )
+model
+time3
+k2
+k <- rbind(time,time2,time3)
+timetable <- k[,1:3]
+rownames(timetable) <- c("일반 train","병렬 설정","병렬+foreach")
+timetable
+```
+
