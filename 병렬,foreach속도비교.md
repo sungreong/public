@@ -192,11 +192,11 @@ timetable <- k[,1:3]
 rownames(timetable) <- c("일반 train","병렬 설정","병렬+foreach")
 timetable
 ```
-
+ 
 ```
 ##              user.self sys.self elapsed
 ## 일반 train       77.65     0.08   77.81
 ## 병렬 설정         0.93     0.03   33.93
 ## 병렬+foreach      0.09     0.01    9.56
 ```
-
+ 
